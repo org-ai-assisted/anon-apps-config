@@ -1,3 +1,223 @@
+commit 60af03c3d098db2410b450fcd1c427c6ac187a53
+Merge: 1ab5958 d9bc97c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 8 00:37:12 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit d9bc97c1458ef3c26ff731671ca06298d798def8
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Sep 6 00:44:19 2026 -0400
+
+    Polish
+
+commit 7aeb0293ad38e6de3b038114671ab5e31dad11aa
+Merge: 1ab5958 3cddd32
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Sep 6 00:35:02 2026 -0400
+
+    Merge branch 'ai' into arraybolt3/trixie
+
+commit 3cddd3299ff2d19668b1bb25b0b82baa61eb7aeb
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Sat Aug 8 04:56:36 2026 -0400
+
+    CI: enrol in the pre-push static gate
+
+    This repo had no GitHub Actions workflow at all, so nothing verified its PRs on
+    the server side -- the only gate was ci-repro run locally.
+
+    The workflow file is the canonical consumer template, copied verbatim from
+    developer-meta-files/consumer-templates/.github/workflows/. It is managed: once
+    present, dm-packaging-helper-script's pkg_update_consumer_workflows keeps it in
+    sync, so it must not be hand-edited here.
+
+    Enrolment is deliberately a SEPARATE act from propagation: that function uses
+    pkg_update_if_exists, which only updates a workflow that already exists, and
+    pkg_install_dependabot_yml skips any repo with no .github/workflows/ directory.
+    Neither creates the first one. Hence this commit.
+
+    Scope: the repos this session actually changed and that ship shell code -- not
+    every repo lacking CI. Enrolling a repo consumes shared org-wide Actions
+    concurrency (20 jobs, the real limit; public repos are not minute-billed), so it
+    is worth spending where there is signal.
+
+    Verified BEFORE enrolling: 'ci-repro.sh --worktree' passes for this repo, so the
+    gate arrives green rather than turning someone's PR red on arrival.
+
+    NOTE, so it is not a surprise: creating .github/workflows/ makes this repo
+    eligible for the canonical .github/dependabot.yml on the next propagation pass,
+    which pkg_install_dependabot_yml installs into any repo that uses Actions.
+
+commit f60b0ed05aed07c5173dbe0a2865b1e8fee19a66
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Sat Aug 8 00:46:12 2026 -0400
+
+    ai-review-todo: all pending reviews completed
+
+    ai-review removes this file when nothing is left pending. The coderabbit
+    backlog drained, so the entries it tracked are done.
+
+commit e4e263445a0c9e7dd614992570ed35d85b49817e
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Fri Aug 7 14:53:36 2026 -0400
+
+    restore 'set -x' dropped by the strict-mode pass
+
+    The R-010 conversion replaced each script's existing preamble wholesale and did
+    not carry 'set -x' across. That is a silent loss of diagnostic output, and for
+    several of these it is the only output there is:
+
+    - build-time scripts (hardened-kernel build / download / ci_test, tirdad
+      build.sh, initializer-dist chroot-scripts-post.d): the trace IS the build log,
+      so a failing invocation and its expanded arguments become unavailable exactly
+      when they are needed.
+    - boot-time scripts (libvirt-dist, repository-dist-initializer).
+    - scripts whose only messages are 'true "INFO: ..."' lines, which produce
+      nothing on their own -- removing xtrace silences them completely.
+    - test harnesses (tb-updater unit_test, sdwdate-gui fuzzer), where the trace is
+      the point.
+
+    It was also inconsistent: initializer-dist's 80_cleanup kept it while its four
+    siblings in the same directory lost it.
+
+    Nothing asked for this and no commit described it as intentional, so it is
+    restored everywhere it was active.
+
+    Found by codex on initializer-dist. The other 19 files came from auditing the
+    whole pass for the same pattern.
+
+    Testing
+    -------
+
+    Gate exit 0 in an ISOLATED checkout, all eleven packages.
+
+    Audit: ~/strict-pass-tests/audit-stripped-setx.sh, which compares every file
+    changed on an 'ai' branch against org-ai-assisted/master and reports any that
+    had 'set -x' and no longer do.
+
+      before:  examined 43 package(s) on branch ai, 342 changed file(s); 23 stripped
+      after:   examined 43 package(s) on branch ai, 342 changed file(s);  0 stripped
+
+    The audit prints its own coverage, and fails outright if it examines zero
+    packages. Its first version tested '[ -d "$pkg/.git" ]', which is false for a
+    submodule -- .git is a FILE there -- so it skipped all 43 and reported nothing
+    stripped. A count that can be read is the difference between "clean" and "never
+    looked".
+
+commit dfb686da655d007540ca60bb8efe4caad99abd29
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Fri Aug 7 12:53:25 2026 -0400
+
+    anon-apps-config: the IRC reset scripts were left SILENT
+
+    An ai-review pass found that removing the left-on 'set -x' made these scripts
+    print nothing at all.
+
+    Their user-facing messages were written as 'true "INFO: ..."'. That produces
+    output ONLY under xtrace -- the shell echoes the command, so the string reaches
+    the terminal as a side effect. With 'set -x' gone, the user no longer sees:
+
+      INFO: Resetting your IRC HexChat identity...
+      INFO: A backup can be found: <path> - feel free to delete it.
+      INFO: Be sure to change your Tor circuit before reconnecting to IRC!
+
+    and, running as root, no longer sees "Do not run as root!" before exiting 112 --
+    just a bare non-zero exit.
+
+    The messages are now printf, so they are real output independent of tracing.
+    The backup location and the Tor-circuit warning are the entire point of running
+    these scripts.
+
+    Why the harness agreed with the silence
+    ----------------------------------------
+
+    It stripped 'set -x' from BOTH copies, on the reasoning that removing left-on
+    tracing is part of the conversion and not a behavioural difference. That is
+    true for every other package in this pass and FALSE here, because for these
+    scripts the xtrace output WAS the user-facing output. Both sides went silent
+    and the comparison agreed.
+
+    The harness no longer strips it here. Instead it normalises the two forms the
+    SAME message arrives in -- "+ true 'MSG'" before, "MSG" now -- so the
+    comparison is about what the user SEES rather than how it got there. Two
+    assertions were added that check the messages actually reach the user.
+
+      8 same, 0 differing
+
+    Canary: putting the messages back to 'true "..."' -- the silent state this pass
+    shipped -- gives 0 same, 8 differing, with both assertions reporting SILENT.
+
+    One finding REJECTED, with evidence
+    -------------------------------------
+
+    The same review claimed the unquoted tilde in 'mv -- ~/.config/hexchat
+    "${backup_folder}"' word-splits when HOME contains a space. Bash does not word-
+    split the result of tilde expansion; only parameter expansion, command
+    substitution and arithmetic expansion are split. Measured:
+
+      HOME="/tmp/home with space"
+      f ~/.config/hexchat    -> args=1: [/tmp/home with space/.config/hexchat]
+      f ${HOME}/.config/hexchat -> args=3: [/tmp/home] [with] [space/.config/hexchat]
+
+    The tilde form is the SAFE one here. No change made.
+
+commit 8adfb725255f9c8fd5db67949506dfa8a4bcc209
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Fri Aug 7 11:12:39 2026 -0400
+
+    anon-apps-config: R-010 strict mode for the 2 IRC reset scripts
+
+    Files: usr/bin/{hexchat-reset,xchat-reset}.
+
+    etc/onionjuggler/conf.d/30_whonix.conf is NOT touched: it is a CONFIGURATION
+    FILE that onionjuggler sources, not a script it executes. Its own header says
+    so -- "Configuration file for OnionJuggler ... DO NOT EDIT THIS FILE ...
+    override these options in /etc/onionjuggler/conf.d/*.conf" -- while carrying a
+    '#!/usr/bin/env sh' shebang and an exec bit. A strict-mode block there would
+    rewrite onionjuggler's own shell options.
+
+    No nounset traps in the two scripts. The change is the preamble, removal of the
+    left-on 'set -x', '==' -> '=' inside '[', '--' before the mv and cp operands,
+    braces, and an SC2317 waiver on error_handler, which is reached only through
+    the ERR trap.
+
+    Testing
+    -------
+
+    Gate exit 0 in an ISOLATED checkout.
+
+    New harness at ~/strict-pass-tests/aac-test/. Six cases: an existing profile,
+    no existing profile, and the client not running, for each script.
+
+    Each script kills the client, MOVES the existing profile aside as a backup, and
+    copies a fresh one from /etc/skel. The backup is the user's IRC identity and
+    losing it is not recoverable, so the harness compares what ended up on disk --
+    the file list and the file contents under HOME -- not just stdout.
+
+      6 same, 0 differing
+
+    Canary: replacing the backup 'mv' with a delete leaves stdout and the exit code
+    IDENTICAL, and is caught only by the missing backup file and its contents.
+    4 same, 2 differing.
+
+    Harness note: the first version reported six differences because its fixture
+    used the wrong profile layout -- hexchat lives under ~/.config/hexchat but
+    xchat under ~/.xchat2 -- so the copy failed on both sides. A broken fixture and
+    a real regression look the same until you read the diff.
+
+    TOOLING FIXED IN THE SAME PASS: classify-shell.py listed the onionjuggler
+    config fragment as standalone work. It now treats any '*.conf' under a 'conf.d'
+    directory as externally sourced, the same class as /etc/bash.bash_logout fixed
+    earlier this pass. Regression test at ~/strict-pass-tests/classify-shell-test.py
+    -- 7 pass with the rule, 6 pass 1 fail without it.
+
+commit 1ab595842a9884ff3691610954a515b5566ac719
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 22:28:26 2026 +0000
+
+    bumped changelog version
+
 commit 3aaa109d7d2cf7c5531671eb04f1f76b8b657de3
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Wed May 20 16:57:29 2026 -0400

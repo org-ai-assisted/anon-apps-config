@@ -12,17 +12,8 @@ set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
 
-## These messages are printf, not 'true "..."'.
-##
-## The original relied on 'set -x' to make its 'true' lines visible: xtrace
-## echoes the command, so the string reached the terminal as a side effect.
-## Removing the left-on 'set -x' -- part of this pass -- therefore made the
-## script SILENT: no backup location, no "change your Tor circuit before
-## reconnecting" warning, and no "Do not run as root!" before exiting 112.
-
+# shellcheck disable=SC2317
 error_handler() {
-   ## Reached only through the ERR trap below.
-   # shellcheck disable=SC2317
    true "ERROR!"
    exit 1
 }
@@ -30,11 +21,11 @@ error_handler() {
 trap error_handler ERR
 
 if [ "$(id -u)" = "0" ]; then
-      printf '%s\n' "Do not run as root!" >&2
+      true "Do not run as root!"
       exit 112
 fi
 
-printf '%s\n' "INFO: Resetting your IRC HexChat identity..."
+true "INFO: Resetting your IRC HexChat identity..."
 killall hexchat || true
 
 ## Make a backup
@@ -51,6 +42,6 @@ fi
 mkdir --parents ~/.config/hexchat
 cp -r -- /etc/skel/.config/hexchat ~/.config/
 
-printf '%s\n' "INFO: Done."
-printf '%s\n' "INFO: A backup can be found: ${backup_folder} - feel free to delete it."
-printf '%s\n' "INFO: Be sure to change your Tor circuit before reconnecting to IRC!"
+true "INFO: Done."
+true "INFO: A backup can be found: ${backup_folder} - feel free to delete it."
+true "INFO: Be sure to change your Tor circuit before reconnecting to IRC!"
